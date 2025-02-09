@@ -1,4 +1,4 @@
-"""train.py: Train the RNN model."""
+"""train.py: Train the RNN model with MLflow logging."""
 
 import random
 import string
@@ -6,9 +6,12 @@ import time
 from argparse import Namespace
 from math import floor
 
+import mlflow
 import torch
 from torch.optim import Adam
 from tqdm import tqdm
+
+from parsing import VALID_LOSSES
 
 all_letters = string.ascii_letters + " .,;'-"
 n_letters = len(all_letters) + 1  # plus EOS marker
@@ -60,22 +63,21 @@ def random_training_example(all_categories, category_lines):
 
 
 def train_iteration(
-    rnn, optimizer, criterion, category_tensor, input_line_tensor, target_line_tensor
+    model, optimizer, criterion, category_tensor, input_line_tensor, target_line_tensor
 ):
     target_line_tensor.unsqueeze_(-1)
-    hidden = rnn.init_hidden()
+    hidden = model.init_hidden()
 
-    rnn.zero_grad()
+    model.zero_grad()
 
     loss = 0.0
     output = None
     for i in range(input_line_tensor.size(0)):
-        output, hidden = rnn(category_tensor, input_line_tensor[i], hidden)
+        output, hidden = model(category_tensor, input_line_tensor[i], hidden)
         loss_i = criterion(output, target_line_tensor[i])
         loss += loss_i
 
     loss.backward()
-
     optimizer.step()
 
     return output, loss.item() / input_line_tensor.size(0)
@@ -89,32 +91,49 @@ def time_since(since):
     return "%3dm %2ds" % (m, s)
 
 
-def train(rnn, args: Namespace, all_categories, category_lines):
+def train(model, args: Namespace, all_categories, category_lines):
+    """Train the model while logging with MLflow."""
 
-    all_losses = []
-    total_loss = 0
-    optimizer = Adam(rnn.parameters(), lr=args.learning_rate)
+    mlflow.set_experiment(args.experiment_name)
 
-    start = time.time()
-    for i in (pbar := tqdm(range(1, args.n_iterations + 1))):
-        _, loss = train_iteration(
-            rnn,
-            optimizer,
-            args.criterion,
-            *random_training_example(all_categories, category_lines),
-        )
-        total_loss += loss
+    with mlflow.start_run():
+        # Log hyperparameters
+        mlflow.log_param("architecture", model.__class__.__name__)
+        mlflow.log_param("hidden_size", args.hidden_size)
+        mlflow.log_param("learning_rate", args.learning_rate)
+        mlflow.log_param("n_iterations", args.n_iterations)
+        mlflow.log_param("loss_type", args.criterion)
 
-        if i % args.print_every == 0:
-            pbar.set_description(
-                f"t={time_since(start)} iter={i:7d} ({i/args.n_iterations*100:4.2f}%) {loss=:6.4f}"
+        all_losses = []
+        total_loss = 0
+        loss_fn = VALID_LOSSES[args.criterion]
+        optimizer = Adam(model.parameters(), lr=args.learning_rate)
+
+        start = time.time()
+        for i in (pbar := tqdm(range(1, args.n_iterations + 1))):
+            _, loss = train_iteration(
+                model,
+                optimizer,
+                loss_fn,
+                *random_training_example(all_categories, category_lines),
             )
+            total_loss += loss
+            mlflow.log_metric("loss", loss, step=i)
 
-        if i % args.plot_every == 0:
-            all_losses.append(total_loss / args.plot_every)
-            total_loss = 0
+            if i % args.print_every == 0:
+                pbar.set_description(
+                    f"t={time_since(start)} iter={i:7d} ({i/args.n_iterations*100:4.2f}%) {loss=:6.4f}"
+                )
 
-    print(f"Training complete: {time.time() - start:.2f}s. Saving model...")
-    torch.save(rnn, args.model)
+            if i % args.plot_every == 0:
+                avg_loss = total_loss / args.plot_every
+                all_losses.append(avg_loss)
+                mlflow.log_metric("avg_loss", avg_loss, step=i)
+                total_loss = 0
 
-    return all_losses
+        training_time = time.time() - start
+        mlflow.log_metric("training_time", training_time)
+
+        print(f"Training complete: {training_time:.2f}s. Saving model...")
+
+        return all_losses

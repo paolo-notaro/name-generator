@@ -3,3 +3,5 @@ models
 .vscode
 .idea
 __pycache__
+mlruns
+images

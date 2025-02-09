@@ -1,3 +1,5 @@
+import random
+import string
 from argparse import ArgumentParser
 
 from torch.nn import CrossEntropyLoss, L1Loss, MSELoss, NLLLoss
@@ -20,10 +22,16 @@ VALID_ARCHITECTURES = {
 }
 
 
+def random_experiment_name():
+    """Generate a random experiment name."""
+    return "exp-" + "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
+
+
 def parse_args():
 
     parser = ArgumentParser(description="name_generator")
 
+    # Model parameters
     parser.add_argument(
         "-m",
         "--model",
@@ -37,8 +45,8 @@ def parse_args():
         help="Model architecture",
         required=False,
         default="rnn",
-        choices=list(VALID_ARCHITECTURES.values()),
-        type=VALID_ARCHITECTURES.get,
+        choices=list(VALID_ARCHITECTURES.keys()),
+        type=str,
     )
     parser.add_argument(
         "-l",
@@ -49,11 +57,37 @@ def parse_args():
         action="store_true",
     )
     parser.add_argument(
+        "-s",
+        "--save-model-path",
+        help="Model save path",
+        required=False,
+        default=None,
+        type=str,
+    )
+    parser.add_argument(
+        "--hidden-size",
+        help="Hidden size of the RNN",
+        required=False,
+        default=128,
+        type=int,
+    )
+
+    # Training parameters
+    parser.add_argument(
+        "-t",
+        "--do-training",
+        help="If true, do training",
+        required=False,
+        default=False,
+        action="store_true",
+    )
+    parser.add_argument(
         "-n",
         "--n-iterations",
         help="Number of iterations",
         required=False,
-        default=100000,
+        type=int,
+        default=100_000,
     )
     parser.add_argument(
         "-p",
@@ -70,28 +104,12 @@ def parse_args():
         default=500,
     )
     parser.add_argument(
-        "-t",
-        "--do-training",
-        help="If true, do training",
-        required=False,
-        default=False,
-        action="store_true",
-    )
-    parser.add_argument(
-        "--hidden-size",
-        help="Hidden size of the RNN",
-        required=False,
-        default=128,
-        type=int,
-    )
-
-    parser.add_argument(
         "--criterion",
         help="Criterion for the RNN",
         required=False,
         default="nll",
-        choices=VALID_LOSSES.values(),
-        type=VALID_LOSSES.get,
+        choices=VALID_LOSSES.keys(),
+        type=str,
     )
     parser.add_argument(
         "--learning-rate",
@@ -100,4 +118,14 @@ def parse_args():
         default=0.0005,
         type=float,
     )
+
+    # MLflow experiment tracking
+    parser.add_argument(
+        "-e",
+        "--experiment_name",
+        type=str,
+        default=random_experiment_name(),
+        help="Experiment name for MLflow tracking. Defaults to a random name.",
+    )
+
     return parser.parse_args()

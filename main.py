@@ -1,12 +1,14 @@
 import glob
 import os
 import unicodedata
+from datetime import datetime
 
 import matplotlib.pyplot as plt
+import mlflow
 import torch
 
-from model import RNN
-from parsing import parse_args
+from model import RNN, GRUModel, LSTMModel, MixtureOfExperts, TransformerModel
+from parsing import VALID_ARCHITECTURES, parse_args
 from train import all_letters, input_tensor, n_letters, to_one_hot, train
 
 
@@ -14,7 +16,6 @@ def find_files(path):
     return glob.glob(path)
 
 
-# Turn a Unicode string to plain ASCII, thanks to http://stackoverflow.com/a/518232/2809427
 def unicode_to_ascii(s):
     return "".join(
         c
@@ -53,13 +54,13 @@ def load_files(names_data_path: str):
 def sample(rnn, category, all_categories, start_letter="A", max_length=20):
     with torch.no_grad():  # no need to track history in sampling
         cat_tensor = to_one_hot(category, all_categories)
-        input = input_tensor(start_letter)
+        input_ = input_tensor(start_letter)
         hidden = rnn.init_hidden()
 
         output_name = start_letter
 
         for i in range(max_length):
-            output, hidden = rnn(cat_tensor, input[0], hidden)
+            output, hidden = rnn(cat_tensor, input_[0], hidden)
             topv, topi = output.topk(1)
             topi = topi[0][0]
             if topi == n_letters - 1:
@@ -67,7 +68,7 @@ def sample(rnn, category, all_categories, start_letter="A", max_length=20):
             else:
                 letter = all_letters[topi]
                 output_name += letter
-            input = input_tensor(letter)
+            input_ = input_tensor(letter)
 
         return output_name
 
@@ -79,21 +80,24 @@ def samples(rnn, category, all_categories, start_letters="ABC"):
 
 
 def main():
-
     args = parse_args()
+    mlflow.set_tracking_uri("file:./mlruns")  # Local MLflow tracking
 
     print("Loading data...")
     category_lines, all_categories = load_files("data/names/*.txt")
 
     print("Building model...")
-    if args.load_model:
-        if "{architecture}" in {args.model}:
-            model_path = args.model.format(architecture=args.architecture)
-        else:
-            model_path = args.model
-        model = torch.load(model_path, weights_only=False)
+    # get model path
+    if "{architecture}" in args.model:
+        load_model_path = args.model.format(architecture=args.architecture)
     else:
-        model = args.architecture(
+        load_model_path = args.model
+
+    # load model
+    if args.load_model:
+        model = torch.load(load_model_path, weights_only=False)
+    else:
+        model = VALID_ARCHITECTURES[args.architecture](
             input_size=n_letters,
             hidden_size=args.hidden_size,
             output_size=n_letters,
@@ -101,11 +105,25 @@ def main():
         )
 
     if args.do_training:
-        print("Training model...")
+        time_start = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+        save_model_path = (
+            args.save_model_path
+            if args.save_model_path
+            else f"models/{args.architecture}_{time_start}.pt"
+        )
+        print("Training model with MLflow tracking...")
         all_losses = train(model, args, all_categories, category_lines)
+
+        torch.save(model, save_model_path)
+        mlflow.log_artifact(save_model_path)
 
         plt.figure()
         plt.plot(all_losses)
+        plt.title(f"Training Loss - {args.architecture}")
+        plt.xlabel("Iterations")
+        plt.ylabel("Loss")
+        plt.savefig(f"images/loss_{args.architecture}_{time_start}.png")
+        mlflow.log_artifact(f"images/loss_{args.architecture}_{time_start}.png")
         plt.show()
 
     print("Sampling names...")
