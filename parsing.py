@@ -35,9 +35,9 @@ def parse_args():
     parser.add_argument(
         "-m",
         "--model",
-        help="Model file path",
+        help="Load model file path",
         required=False,
-        default="models/{architecture}",
+        default=None,
     )
     parser.add_argument(
         "-a",
@@ -49,15 +49,7 @@ def parse_args():
         type=str,
     )
     parser.add_argument(
-        "-l",
-        "--load-model",
-        help="If true, load model from file",
-        required=False,
-        default=False,
-        action="store_true",
-    )
-    parser.add_argument(
-        "-s",
+        "-o",
         "--save-model-path",
         help="Model save path",
         required=False,

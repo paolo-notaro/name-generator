@@ -86,16 +86,12 @@ def main():
     print("Loading data...")
     category_lines, all_categories = load_files("data/names/*.txt")
 
-    print("Building model...")
-    # get model path
-    if "{architecture}" in args.model:
-        load_model_path = args.model.format(architecture=args.architecture)
-    else:
-        load_model_path = args.model
+    print("Preparing model...")
 
     # load model
-    if args.load_model:
-        model = torch.load(load_model_path, weights_only=False)
+    if args.model:
+        model = torch.load(args.model, weights_only=False)
+        model.eval()
     else:
         model = VALID_ARCHITECTURES[args.architecture](
             input_size=n_letters,

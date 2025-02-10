@@ -95,6 +95,7 @@ def train(model, args: Namespace, all_categories, category_lines):
     """Train the model while logging with MLflow."""
 
     mlflow.set_experiment(args.experiment_name)
+    model.train()
 
     with mlflow.start_run():
         # Log hyperparameters
@@ -133,6 +134,7 @@ def train(model, args: Namespace, all_categories, category_lines):
 
         training_time = time.time() - start
         mlflow.log_metric("training_time", training_time)
+        model.eval()
 
         print(f"Training complete: {training_time:.2f}s. Saving model...")
 
