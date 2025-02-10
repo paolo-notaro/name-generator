@@ -1,7 +1,7 @@
 # Name Generator
 ## Description
 A Python-based name generator that creates random names based on predefined patterns and rules.
-Adapted from [this Pytorch tutorial](https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html)'.
+Adapted from [this Pytorch tutorial](https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html).
 
 ## Features
 - Generate random names
