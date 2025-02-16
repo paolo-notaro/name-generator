@@ -24,45 +24,71 @@ Adapted from [this Pytorch tutorial](https://pytorch.org/tutorials/intermediate/
 
 ## Usage
 
-Train a model and generate a new name:
+### Train a Model
 
+To train a model and generate a new name, use the following command:
+
+```sh
+python train_model.py -a <architecture> -e <experiment_name> --hidden_size <hidden_size> --learning_rate <learning_rate> --n_iterations <n_iterations> --print_every <print_every> --plot_every <plot_every> --criterion <criterion> --save_model_path <save_model_path>
 ```
-python main.py -t [...] #  train + inference
-python main.py [...]    # inference only
+
+Example:
+
+```sh
+python train_model.py -a lstm -e my_experiment --hidden_size 128 --learning_rate 0.005 --n_iterations 100000 --print_every 5000 --plot_every 1000 --criterion nll --save_model_path models/lstm_model.pt
+```
+
+### Evaluate a Model
+
+To evaluate a pre-trained model, use the following command:
+
+```sh
+python evaluate_model.py --model <model_path> --hidden_size <hidden_size>
+```
+
+Example:
+
+```sh
+python evaluate_model.py --model models/lstm_model.pt --hidden_size 128
 ```
 
 Full usage:
 
 ```
-> python man.py -h
+> python train_model.py -h
 
-usage: main.py [-h] [-m MODEL] [-a {rnn,lstm,gru,transformer,moe}] [-l] [-s SAVE_MODEL_PATH] [--hidden-size HIDDEN_SIZE] [-t] [-n N_ITERATIONS] [-p PRINT_EVERY] [-pe PLOT_EVERY]
-               [--criterion {nll,ce,mse,l1}] [--learning-rate LEARNING_RATE] [-e EXPERIMENT_NAME]
+usage: train_model.py [-h] [-e EXPERIMENT_NAME] [--hidden_size HIDDEN_SIZE] [--learning_rate LEARNING_RATE] [--n_iterations N_ITERATIONS] [--print_every PRINT_EVERY] [--plot_every PLOT_EVERY] [--criterion {nll,ce,mse,l1}] [--save_model_path SAVE_MODEL_PATH]
 
-name_generator
+Train the RNN model with MLflow logging.
 
 options:
   -h, --help            show this help message and exit
-  -m MODEL, --model MODEL
-                        Model file path
-  -a {rnn,lstm,gru,transformer,moe}, --architecture {rnn,lstm,gru,transformer,moe}
-                        Model architecture
-  -l, --load-model      If true, load model from file
-  -s SAVE_MODEL_PATH, --save-model-path SAVE_MODEL_PATH
-                        Model save path
-  --hidden-size HIDDEN_SIZE
-                        Hidden size of the RNN
-  -t, --do-training     If true, do training
-  -n N_ITERATIONS, --n-iterations N_ITERATIONS
-                        Number of iterations
-  -p PRINT_EVERY, --print-every PRINT_EVERY
-                        Print every n iterations
-  -pe PLOT_EVERY, --plot-every PLOT_EVERY
-                        Plot every n iterations
-  --criterion {nll,ce,mse,l1}
-                        Criterion for the RNN
-  --learning-rate LEARNING_RATE
-                        Learning rate for the RNN
   -e EXPERIMENT_NAME, --experiment_name EXPERIMENT_NAME
-                        Experiment name for MLflow tracking. Defaults to a random name.
+                        MLflow experiment name
+  --hidden_size HIDDEN_SIZE
+                        Size of RNN hidden layer
+  --learning_rate LEARNING_RATE
+                        Learning rate
+  --n_iterations N_ITERATIONS
+                        Number of training iterations
+  --print_every PRINT_EVERY
+                        Print progress every N iterations
+  --plot_every PLOT_EVERY
+                        Plot loss every N iterations
+  --criterion {nll,ce,mse,l1}
+                        Loss function
+  --save_model_path SAVE_MODEL_PATH
+                        Path to save the trained model
+
+> python evaluate_model.py -h
+
+usage: evaluate_model.py [-h] [--hidden_size HIDDEN_SIZE] --model MODEL
+
+Evaluate the generative model.
+
+options:
+  -h, --help            show this help message and exit
+  --hidden_size HIDDEN_SIZE
+                        Size of RNN hidden layer
+  --model MODEL         Path to a pre-trained model
 ```

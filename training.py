@@ -1,25 +1,13 @@
-"""train.py: Train the RNN model with MLflow logging."""
+"""training.py: Train the RNN model with MLflow logging."""
 
-import random
-import string
 import time
 from argparse import Namespace
-from math import floor
 
 import mlflow
-import torch
 from torch.optim import Adam
 from tqdm import tqdm
 
-from parsing import VALID_LOSSES
-
-all_letters = string.ascii_letters + " .,;'-"
-n_letters = len(all_letters) + 1  # plus EOS marker
-
-
-# Random item from a list
-def random_choice(lst: list):
-    return lst[random.randint(0, len(lst) - 1)]
+from utils import VALID_LOSSES, input_tensor, random_choice, target_tensor, to_one_hot
 
 
 # Get a random category and random line from that category
@@ -27,30 +15,6 @@ def random_training_pair(all_categories, category_lines):
     category = random_choice(all_categories)
     line = random_choice(category_lines[category])
     return category, line
-
-
-# One-hot vector for category
-def to_one_hot(category, all_categories):
-    li = all_categories.index(category)
-    one_hot = torch.zeros(1, len(all_categories))
-    one_hot[0][li] = 1
-    return one_hot
-
-
-# One-hot matrix of first to last letters (not including EOS) for input
-def input_tensor(line):
-    tensor = torch.zeros(len(line), 1, n_letters)
-    for li in range(len(line)):
-        letter = line[li]
-        tensor[li][0][all_letters.find(letter)] = 1
-    return tensor
-
-
-# LongTensor of second letter to end (EOS) for target
-def target_tensor(line):
-    letter_indexes = [all_letters.find(line[li]) for li in range(1, len(line))]
-    letter_indexes.append(n_letters - 1)  # EOS
-    return torch.LongTensor(letter_indexes)
 
 
 # Make category, input, and target tensors from a random category, line pair
@@ -81,14 +45,6 @@ def train_iteration(
     optimizer.step()
 
     return output, loss.item() / input_line_tensor.size(0)
-
-
-def time_since(since):
-    now = time.time()
-    s = now - since
-    m = floor(s / 60)
-    s -= m * 60
-    return "%3dm %2ds" % (m, s)
 
 
 def train(model, args: Namespace, all_categories, category_lines):
