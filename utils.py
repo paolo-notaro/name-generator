@@ -89,24 +89,23 @@ def random_choice(lst: list):
 
 
 # One-hot vector for category
-def to_one_hot(category, all_categories):
-    li = all_categories.index(category)
-    one_hot = torch.zeros(1, len(all_categories))
-    one_hot[0][li] = 1
-    return one_hot
+def to_one_hot(category, all_categories) -> torch.tensor:
+    category_index = all_categories.index(category)
+    tensor = torch.zeros(1, 1, len(all_categories))
+    tensor[0][0][category_index] = 1
+    return tensor
 
 
 # One-hot matrix of first to last letters (not including EOS) for input
-def input_tensor(line):
-    tensor = torch.zeros(len(line), 1, n_letters)
-    for li in range(len(line)):
-        letter = line[li]
-        tensor[li][0][all_letters.find(letter)] = 1
+def input_tensor(line: str) -> torch.tensor:
+    tensor = torch.zeros(len(line), n_letters)
+    for li, letter in enumerate(line):
+        tensor[li][all_letters.find(letter)] = 1
     return tensor
 
 
 # LongTensor of second letter to end (EOS) for target
-def target_tensor(line):
+def target_tensor(line: str) -> torch.tensor:
     letter_indexes = [all_letters.find(line[li]) for li in range(1, len(line))]
     letter_indexes.append(n_letters - 1)  # EOS
     return torch.LongTensor(letter_indexes)

@@ -7,24 +7,26 @@ class RNN(nn.Module):
         super(RNN, self).__init__()
         self.hidden_size = hidden_size
 
-        self.i2h = nn.Linear(n_categories + input_size + hidden_size, hidden_size)
-        self.i2o = nn.Linear(n_categories + input_size + hidden_size, output_size)
-        self.o2o = nn.Linear(hidden_size + output_size, output_size)
+        self.rnn = nn.RNN(n_categories + input_size, hidden_size, batch_first=True)
+        self.o2o = nn.Linear(hidden_size + input_size, output_size)
         self.dropout = nn.Dropout(0.1)
-        self.softmax = nn.LogSoftmax(dim=1)
+        self.softmax = nn.LogSoftmax(dim=2)
+        self.num_directions = 1
 
     def forward(self, category, input_tensor, hidden):
-        input_combined = torch.cat((category, input_tensor, hidden), 1)
-        hidden = self.i2h(input_combined)
-        output = self.i2o(input_combined)
-        output_combined = torch.cat((hidden, output), 1)
+
+        input_combined = torch.cat(
+            (category, input_tensor), dim=2
+        )  # Concatenate along the feature dimension
+        output, hidden = self.rnn(input_combined, hidden)
+        output_combined = torch.cat((output, input_tensor), dim=2)
         output = self.o2o(output_combined)
         output = self.dropout(output)
         output = self.softmax(output)
         return output, hidden
 
-    def init_hidden(self):
-        return torch.zeros(1, self.hidden_size)
+    def init_hidden(self, batch_size=1):
+        return torch.zeros(self.num_directions, batch_size, self.hidden_size)
 
 
 class LSTMModel(nn.Module):
@@ -35,22 +37,23 @@ class LSTMModel(nn.Module):
         self.lstm = nn.LSTM(n_categories + input_size, hidden_size, batch_first=True)
         self.fc = nn.Linear(hidden_size, output_size)
         self.dropout = nn.Dropout(0.1)
-        self.softmax = nn.LogSoftmax(dim=1)
+        self.softmax = nn.LogSoftmax(dim=2)
 
     def forward(self, category, input_tensor, hidden):
-        input_combined = torch.cat((category, input_tensor), dim=1).unsqueeze(
-            1
-        )  # Add sequence dimension
+
+        input_combined = torch.cat(
+            (category, input_tensor), dim=2
+        )  # Concatenate along the feature dimension
         output, (hidden, cell) = self.lstm(input_combined, hidden)
-        output = self.fc(output.squeeze(1))
+        output = self.fc(output)
         output = self.dropout(output)
         output = self.softmax(output)
         return output, (hidden, cell)
 
-    def init_hidden(self):
+    def init_hidden(self, batch_size=1):
         return (
-            torch.zeros(1, 1, self.hidden_size),
-            torch.zeros(1, 1, self.hidden_size),
+            torch.zeros(1, batch_size, self.hidden_size),
+            torch.zeros(1, batch_size, self.hidden_size),
         )  # (hidden_state, cell_state)
 
 
@@ -62,21 +65,23 @@ class GRUModel(nn.Module):
         self.gru = nn.GRU(n_categories + input_size, hidden_size, batch_first=True)
         self.fc = nn.Linear(hidden_size, output_size)
         self.dropout = nn.Dropout(0.1)
-        self.softmax = nn.LogSoftmax(dim=1)
+        self.softmax = nn.LogSoftmax(dim=2)
+        self.num_directions = 1
 
     def forward(self, category, input_tensor, hidden):
-        input_combined = torch.cat((category, input_tensor), dim=1).unsqueeze(
-            1
-        )  # Add sequence dimension
+
+        input_combined = torch.cat(
+            (category, input_tensor), dim=2
+        )  # Concatenate along the feature dimension
         output, hidden = self.gru(input_combined, hidden)
-        output = self.fc(output.squeeze(1))
+        output = self.fc(output)
         output = self.dropout(output)
         output = self.softmax(output)
         return output, hidden
 
-    def init_hidden(self):
+    def init_hidden(self, batch_size=1):
         return torch.zeros(
-            1, 1, self.hidden_size
+            self.num_directions, batch_size, self.hidden_size
         )  # GRU only needs hidden state, not cell state
 
 
@@ -93,28 +98,45 @@ class TransformerModel(nn.Module):
         super(TransformerModel, self).__init__()
         self.hidden_size = hidden_size
 
-        self.embedding = nn.Linear(n_categories + input_size, hidden_size)
-        self.pos_encoder = nn.Embedding(10, hidden_size)  # Simple positional encoding
+        self.letter_embedding = nn.Embedding(input_size, hidden_size)
+        self.category_embedding = nn.Embedding(n_categories, hidden_size)
+        self.positional_embedding = nn.Embedding(100, hidden_size)  # 100 = max length
         encoder_layers = nn.TransformerEncoderLayer(
             d_model=hidden_size, nhead=num_heads
         )
+
         self.transformer = nn.TransformerEncoder(encoder_layers, num_layers=num_layers)
         self.fc = nn.Linear(hidden_size, output_size)
-        self.softmax = nn.LogSoftmax(dim=1)
+        self.softmax = nn.LogSoftmax(dim=2)
 
     def forward(self, category, input_tensor, hidden=None):
-        input_combined = torch.cat((category, input_tensor), dim=1).unsqueeze(
-            0
-        )  # (seq_len=1, batch=1, feature_dim)
-        embedded = self.embedding(input_combined)
-        position_ids = torch.arange(1).unsqueeze(0)  # Fake position ids
-        pos_encoded = embedded + self.pos_encoder(position_ids)
-        output = self.transformer(pos_encoded)
-        output = self.fc(output.squeeze(0))
-        output = self.softmax(output)
-        return output, None  # Transformers do not maintain hidden states
 
-    def init_hidden(self):
+        input_combined = torch.cat(
+            (category, input_tensor), dim=2
+        )  # Concatenate along the feature dimension
+
+        # get category, letter and positional indices
+        letter_indices = torch.argmax(input_tensor, dim=2)
+        category_indices = torch.argmax(category, dim=2)
+        positional_indices = torch.arange(input_combined.size(1)).expand(
+            input_combined.size(0), input_combined.size(1)
+        )
+
+        # compute embeddings and sum
+        letter_embeddings = self.letter_embedding(letter_indices)
+        category_embeddings = self.category_embedding(category_indices)
+        positional_embeddings = self.positional_embedding(positional_indices)
+        embeddings = letter_embeddings + category_embeddings + positional_embeddings
+
+        # transformer layer
+        output = self.transformer(embeddings)
+
+        # finaL output layer
+        output = self.fc(output)
+        output = self.softmax(output)
+        return output, None
+
+    def init_hidden(self, batch_size: int = 1):
         return None  # Transformer doesn't use hidden states
 
 
@@ -134,25 +156,27 @@ class MixtureOfExperts(nn.Module):
         )
         self.gate = nn.Linear(n_categories + input_size, num_experts)
         self.fc = nn.Linear(hidden_size, output_size)
-        self.softmax = nn.LogSoftmax(dim=1)
+        self.softmax = nn.LogSoftmax(dim=2)
 
     def forward(self, category, input_tensor, hidden):
-        input_combined = torch.cat((category, input_tensor), dim=1)
+        input_combined = torch.cat(
+            (category, input_tensor), dim=2
+        )  # Concatenate along the feature dimension
 
         # Compute gating scores
         gate_scores = torch.softmax(self.gate(input_combined), dim=1)
 
         # Compute expert outputs
         expert_outputs = torch.stack(
-            [expert(input_combined) for expert in self.experts], dim=1
+            [expert(input_combined) for expert in self.experts], dim=2
         )
 
         # Weighted sum of expert outputs
-        output = torch.sum(gate_scores.unsqueeze(2) * expert_outputs, dim=1)
+        output = torch.sum(gate_scores.unsqueeze(3) * expert_outputs, dim=2)
         output = self.fc(output)
         output = self.softmax(output)
 
         return output, None  # No explicit hidden state
 
-    def init_hidden(self):
+    def init_hidden(self, batch_size: int = 1):
         return None  # Not needed

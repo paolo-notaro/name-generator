@@ -3,7 +3,6 @@ from argparse import ArgumentParser
 import torch
 
 from utils import (
-    VALID_ARCHITECTURES,
     all_letters,
     input_tensor,
     load_files,
@@ -13,41 +12,42 @@ from utils import (
 
 
 # Sample from a category and starting letter
-def sample(rnn, category, all_categories, start_letter="A", max_length=20):
+def sample(model, category, all_categories, start_letter="A", max_length=20):
     with torch.no_grad():  # no need to track history in sampling
         cat_tensor = to_one_hot(category, all_categories)
         input_ = input_tensor(start_letter)
-        hidden = rnn.init_hidden()
+        hidden = model.init_hidden(batch_size=1)
 
         output_name = start_letter
 
-        for i in range(max_length):
-            output, hidden = rnn(cat_tensor, input_[0], hidden)
-            topv, topi = output.topk(1)
-            topi = topi[0][0]
-            if topi == n_letters - 1:
+        for _ in range(max_length):
+            output, hidden = model(cat_tensor, input_.unsqueeze(0), hidden)
+            _, top_i = output.topk(1, dim=-1)
+            top_i = top_i.squeeze().item()
+
+            # end of generation check
+            if top_i == n_letters - 1:
                 break
-            else:
-                letter = all_letters[topi]
-                output_name += letter
+
+            letter = all_letters[top_i]
+            output_name += letter
+
+            # we only give the next letter as input, hidden memorizes the previous ones
             input_ = input_tensor(letter)
 
         return output_name
 
 
 # Get multiple samples from one category and multiple starting letters
-def samples(rnn, category, all_categories, start_letters="ABC"):
+def samples(model, category, all_categories, start_letters="ABC"):
     for start_letter in start_letters:
-        print(sample(rnn, category, all_categories, start_letter))
+        print(sample(model, category, all_categories, start_letter))
 
 
 def parse_evaluate_args():
     parser = ArgumentParser(description="Evaluate the generative model.")
     parser.add_argument(
-        "--hidden_size", type=int, default=128, help="Size of RNN hidden layer"
-    )
-    parser.add_argument(
-        "--model", type=str, required=True, help="Path to a pre-trained model"
+        "-m", "--model", type=str, required=True, help="Path to a pre-trained model"
     )
     return parser.parse_args()
 
@@ -61,7 +61,7 @@ def main():
     # load model
     print("Loading model...")
     model = torch.load(args.model, weights_only=False)
-    model.eval()
+    model.eval()  # Ensure the model is in evaluation mode
 
     print("Sampling names...")
     samples(

@@ -4,10 +4,19 @@ import time
 from argparse import Namespace
 
 import mlflow
+import torch
+import torch.nn.utils.rnn as rnn_utils
 from torch.optim import Adam
 from tqdm import tqdm
 
-from utils import VALID_LOSSES, input_tensor, random_choice, target_tensor, to_one_hot
+from utils import (
+    VALID_LOSSES,
+    input_tensor,
+    random_choice,
+    target_tensor,
+    time_since,
+    to_one_hot,
+)
 
 
 # Get a random category and random line from that category
@@ -26,25 +35,50 @@ def random_training_example(all_categories, category_lines):
     return cat_tensor, input_line_tensor, target_line_tensor
 
 
+def random_training_batch(all_categories, category_lines, batch_size):
+    category_tensors = []
+    input_line_tensors = []
+    target_line_tensors = []
+
+    for _ in range(batch_size):
+        category, line = random_training_pair(all_categories, category_lines)
+        category_tensors.append(to_one_hot(category, all_categories))
+        input_line_tensors.append(input_tensor(line))
+        target_line_tensors.append(target_tensor(line))
+
+    category_tensor = torch.cat(category_tensors, dim=0)
+    input_line_tensor = rnn_utils.pad_sequence(input_line_tensors, batch_first=True)
+    target_line_tensor = rnn_utils.pad_sequence(target_line_tensors, batch_first=True)
+
+    # repeat category tensors L times to match pad sequence length
+    sequence_length = input_line_tensor.size(1)
+    category_tensor = category_tensor.expand(
+        batch_size, sequence_length, category_tensor.size(-1)
+    )
+
+    return category_tensor, input_line_tensor, target_line_tensor
+
+
 def train_iteration(
-    model, optimizer, criterion, category_tensor, input_line_tensor, target_line_tensor
+    model,
+    optimizer,
+    criterion,
+    category_tensors,
+    input_line_tensors,
+    target_line_tensors,
 ):
-    target_line_tensor.unsqueeze_(-1)
-    hidden = model.init_hidden()
+    batch_size = len(input_line_tensors)
+    hidden = model.init_hidden(batch_size)
 
     model.zero_grad()
 
-    loss = 0.0
-    output = None
-    for i in range(input_line_tensor.size(0)):
-        output, hidden = model(category_tensor, input_line_tensor[i], hidden)
-        loss_i = criterion(output, target_line_tensor[i])
-        loss += loss_i
+    output, hidden = model(category_tensors, input_line_tensors, hidden)
+    loss = criterion(output.view(-1, output.size(-1)), target_line_tensors.view(-1))
 
     loss.backward()
     optimizer.step()
 
-    return output, loss.item() / input_line_tensor.size(0)
+    return output, loss.item()
 
 
 def train(model, args: Namespace, all_categories, category_lines):
@@ -60,27 +94,30 @@ def train(model, args: Namespace, all_categories, category_lines):
         mlflow.log_param("learning_rate", args.learning_rate)
         mlflow.log_param("n_iterations", args.n_iterations)
         mlflow.log_param("loss_type", args.criterion)
+        mlflow.log_param("batch_size", args.batch_size)
 
         all_losses = []
-        total_loss = 0
+        total_loss = 0.0
         loss_fn = VALID_LOSSES[args.criterion]
         optimizer = Adam(model.parameters(), lr=args.learning_rate)
 
         start = time.time()
         for i in (pbar := tqdm(range(1, args.n_iterations + 1))):
+            category_tensors, input_line_tensors, target_line_tensors = (
+                random_training_batch(all_categories, category_lines, args.batch_size)
+            )
             _, loss = train_iteration(
                 model,
                 optimizer,
                 loss_fn,
-                *random_training_example(all_categories, category_lines),
+                category_tensors,
+                input_line_tensors,
+                target_line_tensors,
             )
             total_loss += loss
             mlflow.log_metric("loss", loss, step=i)
 
-            if i % args.print_every == 0:
-                pbar.set_description(
-                    f"t={time_since(start)} iter={i:7d} ({i/args.n_iterations*100:4.2f}%) {loss=:6.4f}"
-                )
+            pbar.set_description(f"{loss=:6.4f}")
 
             if i % args.plot_every == 0:
                 avg_loss = total_loss / args.plot_every
