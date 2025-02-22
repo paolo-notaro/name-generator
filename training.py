@@ -2,6 +2,7 @@
 
 import time
 from argparse import Namespace
+from datetime import datetime
 
 import mlflow
 import torch
@@ -14,7 +15,6 @@ from utils import (
     input_tensor,
     random_choice,
     target_tensor,
-    time_since,
     to_one_hot,
 )
 
@@ -87,7 +87,12 @@ def train(model, args: Namespace, all_categories, category_lines):
     mlflow.set_experiment(args.experiment_name)
     model.train()
 
-    with mlflow.start_run():
+    model_size = sum(p.numel() for p in model.parameters())
+    print(f"Model size: {model_size}")
+
+    with mlflow.start_run(
+        run_name=f"{args.architecture}-{datetime.now():%Y-%m-%d-%H-%M-%S}"
+    ):
         # Log hyperparameters
         mlflow.log_param("architecture", model.__class__.__name__)
         mlflow.log_param("hidden_size", args.hidden_size)
@@ -95,6 +100,7 @@ def train(model, args: Namespace, all_categories, category_lines):
         mlflow.log_param("n_iterations", args.n_iterations)
         mlflow.log_param("loss_type", args.criterion)
         mlflow.log_param("batch_size", args.batch_size)
+        mlflow.log_param("model_size", model_size)
 
         all_losses = []
         total_loss = 0.0
