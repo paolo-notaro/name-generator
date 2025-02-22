@@ -1,14 +1,39 @@
 # Name Generator
+
 ## Description
-A Python-based name generator that creates random names based on predefined patterns and rules.
-Adapted from [this Pytorch tutorial](https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html).
+
+Name Generator is a Python-based project that generates random names based on predefined patterns and rules. The project leverages various neural network architectures to create names that resemble those from different languages. This project is an extension [this Pytorch tutorial](https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html).
+
+## Models Involved
+
+The project includes several neural network architectures to generate names:
+
+- **RNN (Recurrent Neural Network)**: A simple recurrent network that processes sequences of characters.
+- **LSTM (Long Short-Term Memory)**: An advanced RNN variant that can capture long-term dependencies.
+- **GRU (Gated Recurrent Unit)**: Another RNN variant that is computationally efficient and effective for sequence modeling.
+- **Transformer**: A model that uses self-attention mechanisms to process sequences in parallel, providing better performance for longer sequences.
+- **Mixture of Experts**: A model that combines multiple expert networks to generate names, with a gating mechanism to select the most appropriate expert.
+
+## Languages Considered
+
+The Name Generator can generate names for various languages, including but not limited to:
+
+- Russian
+- German
+- Spanish
+- Chinese
+- Italian
+
+The project uses a dataset of names from these languages to train the models, ensuring that the generated names resemble real names from the respective languages.
 
 ## Features
-- Generate random names
-- Customize name patterns
-- Save generated names to a file
+
+- Generate random names based on different languages.
+- Customize name patterns and generation rules.
+- Save generated names to a file for further use.
 
 ## Installation
+
 1. Clone the repository:
     ```bash
     git clone https://github.com/yourusername/name-generator.git
@@ -43,26 +68,28 @@ python train_model.py -a lstm -e my_experiment --hidden_size 128 --learning_rate
 To evaluate a pre-trained model, use the following command:
 
 ```sh
-python evaluate_model.py --model <model_path> --hidden_size <hidden_size>
+python evaluate_model.py --model <model_path>
 ```
 
 Example:
 
 ```sh
-python evaluate_model.py --model models/lstm_model.pt --hidden_size 128
+python evaluate_model.py --model models/lstm_model.pt
 ```
 
-Full usage:
+### Full usage
 
 ```
 > python train_model.py -h
 
-usage: train_model.py [-h] [-e EXPERIMENT_NAME] [--hidden_size HIDDEN_SIZE] [--learning_rate LEARNING_RATE] [--n_iterations N_ITERATIONS] [--print_every PRINT_EVERY] [--plot_every PLOT_EVERY] [--criterion {nll,ce,mse,l1}] [--save_model_path SAVE_MODEL_PATH]
+usage: train_model.py [-h] [-a ARCHITECTURE] [-e EXPERIMENT_NAME] [--hidden_size HIDDEN_SIZE] [--learning_rate LEARNING_RATE] [--n_iterations N_ITERATIONS] [--print_every PRINT_EVERY] [--plot_every PLOT_EVERY] [--criterion {nll,ce,mse,l1}] [--batch_size BATCH_SIZE]
 
 Train the RNN model with MLflow logging.
 
 options:
   -h, --help            show this help message and exit
+  -a ARCHITECTURE, --architecture ARCHITECTURE
+                        Model architecture (rnn, lstm, gru, transformer, mixture_of_experts)
   -e EXPERIMENT_NAME, --experiment_name EXPERIMENT_NAME
                         MLflow experiment name
   --hidden_size HIDDEN_SIZE
@@ -77,18 +104,18 @@ options:
                         Plot loss every N iterations
   --criterion {nll,ce,mse,l1}
                         Loss function
-  --save_model_path SAVE_MODEL_PATH
-                        Path to save the trained model
+  --batch_size BATCH_SIZE
+                        Batch size
+```
 
+```
 > python evaluate_model.py -h
 
-usage: evaluate_model.py [-h] [--hidden_size HIDDEN_SIZE] --model MODEL
+usage: evaluate_model.py [-h] --model MODEL
 
 Evaluate the generative model.
 
 options:
   -h, --help            show this help message and exit
-  --hidden_size HIDDEN_SIZE
-                        Size of RNN hidden layer
   --model MODEL         Path to a pre-trained model
 ```
