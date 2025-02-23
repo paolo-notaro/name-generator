@@ -2,6 +2,7 @@ from argparse import ArgumentParser
 
 import torch
 
+from model import RNN, GRUModel, LSTMModel, MixtureOfExperts, TransformerModel
 from utils import (
     all_letters,
     input_tensor,
@@ -23,7 +24,7 @@ def sample(model, category, all_categories, start_letter="A", max_length=20):
         for _ in range(max_length):
             output, hidden = model(cat_tensor, input_.unsqueeze(0), hidden)
             _, top_i = output.topk(1, dim=-1)
-            top_i = top_i.squeeze().item()
+            top_i = top_i[:, -1, :].squeeze().item()
 
             # end of generation check
             if top_i == n_letters - 1:
@@ -32,8 +33,15 @@ def sample(model, category, all_categories, start_letter="A", max_length=20):
             letter = all_letters[top_i]
             output_name += letter
 
-            # we only give the next letter as input, hidden memorizes the previous ones
-            input_ = input_tensor(letter)
+            if isinstance(model, (RNN, LSTMModel, GRUModel)):
+                # we only give the next letter as input, hidden memorizes the previous ones
+                input_ = input_tensor(letter)
+            elif isinstance(model, (TransformerModel, MixtureOfExperts)):
+                # we give the whole name as input
+                input_ = input_tensor(output_name)
+                cat_tensor = torch.cat(
+                    [cat_tensor, to_one_hot(category, all_categories)], dim=1
+                )
 
         return output_name
 
